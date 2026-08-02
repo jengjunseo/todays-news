@@ -35,16 +35,17 @@ export class NaverNewsProvider implements NewsProvider {
     const collected = [];
     for (let page = 0; page < NAVER_MAX_PAGES_PER_QUERY; page += 1) {
       const start = page * NAVER_PAGE_SIZE + 1;
-      const url = new URL("https://openapi.naver.com/v1/search/news.json");
+      const url = new URL("https://naverapihub.apigw.ntruss.com/search/v1/news");
       url.searchParams.set("query", input.query);
       url.searchParams.set("display", String(NAVER_PAGE_SIZE));
       url.searchParams.set("start", String(start));
       url.searchParams.set("sort", "date");
 
       const response = await fetch(url, {
+        method: "GET",
         headers: {
-          "X-Naver-Client-Id": this.clientId,
-          "X-Naver-Client-Secret": this.clientSecret,
+          "X-NCP-APIGW-API-KEY-ID": this.clientId,
+          "X-NCP-APIGW-API-KEY": this.clientSecret,
         },
         cache: "no-store",
       });

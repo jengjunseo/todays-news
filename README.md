@@ -88,7 +88,7 @@ select vault.create_secret('YOUR_LONG_CRON_SECRET', 'cron_secret');
 
 ## NAVER와 AI 연결
 
-NAVER Developers에서 검색 API 사용 애플리케이션을 만든 뒤 client ID/secret을 설정합니다. 서버는 공식 `GET https://openapi.naver.com/v1/search/news.json` 계약과 `X-Naver-Client-Id`, `X-Naver-Client-Secret` 헤더를 사용합니다.
+NAVER API HUB에서 검색 API 사용 애플리케이션을 만든 뒤 client ID/secret을 설정합니다. 서버는 공식 `GET https://naverapihub.apigw.ntruss.com/search/v1/news` 계약과 `X-NCP-APIGW-API-KEY-ID`, `X-NCP-APIGW-API-KEY` 헤더를 사용합니다.
 
 Vercel AI Gateway key와 현재 모델 ID를 설정합니다. 모델은 `AI_MODEL=creator/model-name` 환경변수로만 받습니다. 앱은 설치된 AI SDK의 구조화 출력과 Zod 검증을 사용하며, 입력에 없는 사건·출처 ID는 저장하지 않습니다.
 

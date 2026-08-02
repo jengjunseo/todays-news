@@ -23,9 +23,8 @@ describe("news providers", () => {
   });
 
   it("validates NAVER responses and keeps only the target KST date", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
         Response.json({
           total: 2,
           start: 1,
@@ -47,8 +46,8 @@ describe("news providers", () => {
             },
           ],
         }),
-      ),
     );
+    vi.stubGlobal("fetch", fetchMock);
     const result = await new NaverNewsProvider("id", "secret").search({
       query: "정책",
       category: "politics",
@@ -56,6 +55,25 @@ describe("news providers", () => {
     });
     expect(result).toHaveLength(1);
     expect(result[0]?.title).toBe("대상 날짜");
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0]!;
+    const url = requestUrl instanceof URL ? requestUrl : new URL(requestUrl.toString());
+    expect(`${url.origin}${url.pathname}`).toBe(
+      "https://naverapihub.apigw.ntruss.com/search/v1/news",
+    );
+    expect(url.searchParams.get("query")).toBe("정책");
+    expect(url.searchParams.get("display")).toBe("100");
+    expect(url.searchParams.get("start")).toBe("1");
+    expect(url.searchParams.get("sort")).toBe("date");
+    expect(requestInit).toEqual({
+      method: "GET",
+      headers: {
+        "X-NCP-APIGW-API-KEY-ID": "id",
+        "X-NCP-APIGW-API-KEY": "secret",
+      },
+      cache: "no-store",
+    });
   });
 
   it("rejects a malformed provider response", async () => {
