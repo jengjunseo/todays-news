@@ -70,11 +70,20 @@ describe("three daily nudges", () => {
     expect(result[2]?.secondaryItemId).toBe("item-2");
   });
 
-  it("rejects an invalid item ID and source ID", async () => {
-    const invalidItem = output({ morning: { ...output().morning, primaryItemId: "missing" } });
+  it("uses the primary item source IDs without a correction call", async () => {
     const invalidSource = output({ morning: { ...output().morning, sourceIds: ["S99"] } });
+    const mock = generator([invalidSource]);
+
+    const result = await generateDailyNudges({ sourceDate: "2026-08-01", items }, mock);
+
+    expect(result[0]?.sourceIds).toEqual(["S1", "S2"]);
+    expect(mock.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an invalid item ID", async () => {
+    const invalidItem = output({ morning: { ...output().morning, primaryItemId: "missing" } });
     await expect(
-      generateDailyNudges({ sourceDate: "2026-08-01", items }, generator([invalidItem, invalidSource])),
+      generateDailyNudges({ sourceDate: "2026-08-01", items }, generator([invalidItem, invalidItem])),
     ).rejects.toThrow();
   });
 

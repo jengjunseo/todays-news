@@ -90,6 +90,33 @@ function validateReferences(
   }
 }
 
+function withPrimarySourceIds(
+  output: z.infer<typeof DailyNudgesOutputSchema>,
+  items: DigestItem[],
+) {
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const sourceIdsFor = (primaryItemId: string) => {
+    const primary = itemById.get(primaryItemId);
+    if (!primary) throw new Error("존재하지 않는 item ID입니다.");
+    return primary.sourceIds.slice(0, 2);
+  };
+
+  return {
+    morning: {
+      ...output.morning,
+      sourceIds: sourceIdsFor(output.morning.primaryItemId),
+    },
+    perspective: {
+      ...output.perspective,
+      sourceIds: sourceIdsFor(output.perspective.primaryItemId),
+    },
+    evening: {
+      ...output.evening,
+      sourceIds: sourceIdsFor(output.evening.primaryItemId),
+    },
+  };
+}
+
 function fixtureOutput(items: DigestItem[]) {
   const primary = items[0]!;
   const secondCategory = items.find((item) => item.category !== primary.category);
@@ -168,18 +195,19 @@ function finalize(
 ): DailyNudge[] {
   const parsed = DailyNudgesOutputSchema.parse(output);
   assertCalmLanguage(parsed);
-  validateReferences(parsed, items);
+  const resolved = withPrimarySourceIds(parsed, items);
+  validateReferences(resolved, items);
   const deliveryDate = nextKstDate(sourceDate);
 
   return (["morning", "perspective", "evening"] as const).map((type) => {
-    const value = parsed[type];
+    const value = resolved[type];
     return DailyNudgeSchema.parse({
       ...value,
       id: createHash("sha256").update(`${sourceDate}:${type}`).digest("hex").slice(0, 24),
       type,
-      secondaryItemId: type === "evening" ? parsed.evening.secondaryItemId : null,
+      secondaryItemId: type === "evening" ? resolved.evening.secondaryItemId : null,
       perspectiveType:
-        type === "perspective" ? parsed.perspective.perspectiveType : null,
+        type === "perspective" ? resolved.perspective.perspectiveType : null,
       scheduledFor: kstDateAtTime(deliveryDate, SCHEDULE[type]).toISOString(),
       status: "pending",
     });
