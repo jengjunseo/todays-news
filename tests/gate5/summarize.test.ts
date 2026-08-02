@@ -74,7 +74,9 @@ describe("AI selection and grounded explanation", () => {
       { items: [validItem("invented")] },
       { items: [validItem("invented")] },
     ]);
-    expect(await summarizeStory("economy", [cluster("cluster-1")], generator)).toEqual([]);
+    await expect(summarizeStory("economy", [cluster("cluster-1")], generator)).rejects.toThrow(
+      "경제 요약/grounding 실패: 후보 밖 cluster ID입니다.",
+    );
   });
 
   it("rejects duplicate clusters and more than two items", async () => {
@@ -82,18 +84,20 @@ describe("AI selection and grounded explanation", () => {
     const tooMany = {
       items: [validItem("cluster-1"), validItem("cluster-2"), validItem("cluster-3")],
     };
-    expect(
-      await summarizeStory(
+    await expect(
+      summarizeStory(
         "economy",
         [cluster("cluster-1"), cluster("cluster-2"), cluster("cluster-3")],
         mockGenerator([duplicate, tooMany]),
       ),
-    ).toEqual([]);
+    ).rejects.toThrow("경제 요약/grounding 실패");
   });
 
-  it("falls back to excluding the category after two invalid responses", async () => {
+  it("preserves the final error after two invalid responses", async () => {
     const generator = mockGenerator([{ invalid: true }, { invalid: true }]);
-    expect(await summarizeStory("economy", [cluster("cluster-1")], generator)).toEqual([]);
+    await expect(summarizeStory("economy", [cluster("cluster-1")], generator)).rejects.toThrow(
+      "경제 요약/grounding 실패",
+    );
     expect(generator.generate).toHaveBeenCalledTimes(2);
   });
 });

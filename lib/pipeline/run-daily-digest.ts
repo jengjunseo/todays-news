@@ -40,14 +40,21 @@ export async function runDailyDigest(options: {
     );
     const clusters = clusterAndRank(articles);
     const candidates = topCandidatesByCategory(clusters);
-    const items = (
-      await Promise.all(
-        NEWS_CATEGORIES.map((category) =>
-          summarizeStory(category, candidates[category], options.summaryGenerator),
-        ),
-      )
-    ).flat();
-    if (items.length === 0) throw new Error("발행할 수 있는 grounded digest item이 없습니다.");
+    const summaryResults = await Promise.allSettled(
+      NEWS_CATEGORIES.map((category) =>
+        summarizeStory(category, candidates[category], options.summaryGenerator),
+      ),
+    );
+    const items = summaryResults.flatMap((result) =>
+      result.status === "fulfilled" ? result.value : [],
+    );
+    if (items.length === 0) {
+      const representativeError = summaryResults.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (representativeError) throw representativeError.reason;
+      throw new Error("발행할 수 있는 grounded digest item이 없습니다.");
+    }
     if (items.length > 10) throw new Error("digest item은 10개를 넘을 수 없습니다.");
     const nudges = await generateDailyNudges(
       { sourceDate, items },

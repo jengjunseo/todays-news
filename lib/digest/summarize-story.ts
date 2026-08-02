@@ -175,8 +175,11 @@ export async function summarizeStory(
         correction: `스키마와 grounding 규칙을 지키세요. 오류: ${firstError instanceof Error ? firstError.message : "invalid response"}`,
       });
       return validateGrounding(second, category, limitedCandidates, sources);
-    } catch {
-      return [];
+    } catch (secondError) {
+      throw new Error(
+        `${CATEGORY_LABEL[category]} 요약/grounding 실패: ${secondError instanceof Error ? secondError.message : "invalid response"}`,
+        { cause: secondError },
+      );
     }
   }
 }
