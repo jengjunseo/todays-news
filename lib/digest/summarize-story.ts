@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 
 import type { StructuredGenerator } from "@/lib/ai/structured-generator";
-import { AiSdkStructuredGenerator } from "@/lib/ai/structured-generator";
+import {
+  AiSdkStructuredGenerator,
+  isExternalAiCallError,
+} from "@/lib/ai/structured-generator";
 import {
   AiDigestSelectionSchema,
   DigestItemSchema,
@@ -168,6 +171,7 @@ export async function summarizeStory(
     });
     return validateGrounding(first, category, limitedCandidates, sources);
   } catch (firstError) {
+    if (isExternalAiCallError(firstError)) throw firstError;
     try {
       const second = await activeGenerator.generate({
         schema: AiDigestSelectionSchema,

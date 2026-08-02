@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import type { StructuredGenerator } from "@/lib/ai/structured-generator";
-import { AiSdkStructuredGenerator } from "@/lib/ai/structured-generator";
+import {
+  AiSdkStructuredGenerator,
+  isExternalAiCallError,
+} from "@/lib/ai/structured-generator";
 import type { DigestItem } from "@/lib/digest/schemas";
 import { kstDateAtTime, nextKstDate } from "@/lib/time/kst";
 
@@ -233,6 +236,7 @@ export async function generateDailyNudges(
       input.items,
     );
   } catch (firstError) {
+    if (isExternalAiCallError(firstError)) throw firstError;
     return finalize(
       await activeGenerator.generate({
         schema: DailyNudgesOutputSchema,

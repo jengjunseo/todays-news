@@ -2,7 +2,7 @@ import {
   createOpenRouter,
   type OpenRouterProviderOptions,
 } from "@openrouter/ai-sdk-provider";
-import { generateText, Output } from "ai";
+import { APICallError, generateText, Output } from "ai";
 import type { z } from "zod";
 
 export interface StructuredGenerator {
@@ -11,6 +11,39 @@ export interface StructuredGenerator {
     prompt: string;
     correction?: string;
   }): Promise<unknown>;
+}
+
+const EXTERNAL_ERROR_NAMES = new Set(["AbortError", "ResponseAborted", "TimeoutError"]);
+const TRANSPORT_ERROR_CODES = new Set([
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENETUNREACH",
+  "EPIPE",
+  "ETIMEDOUT",
+]);
+
+export function isExternalAiCallError(error: unknown): boolean {
+  let current = error;
+
+  for (let depth = 0; current != null && depth < 5; depth += 1) {
+    if (APICallError.isInstance(current)) return true;
+    if (!(current instanceof Error)) return false;
+    if (EXTERNAL_ERROR_NAMES.has(current.name)) return true;
+    if (/operation (?:was )?aborted|fetch failed|failed to fetch/i.test(current.message)) {
+      return true;
+    }
+    if (
+      "code" in current &&
+      typeof current.code === "string" &&
+      TRANSPORT_ERROR_CODES.has(current.code)
+    ) {
+      return true;
+    }
+    current = current.cause;
+  }
+
+  return false;
 }
 
 export class AiSdkStructuredGenerator implements StructuredGenerator {
@@ -31,7 +64,7 @@ export class AiSdkStructuredGenerator implements StructuredGenerator {
         provider: { require_parameters: true },
       }),
       maxRetries: 0,
-      timeout: { totalMs: 60_000 },
+      timeout: { totalMs: 30_000 },
       maxOutputTokens: 4096,
       providerOptions: {
         openrouter: {

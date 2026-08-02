@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { APICallError } from "ai";
 
 import type { StructuredGenerator } from "@/lib/ai/structured-generator";
 import { summarizeStory } from "@/lib/digest/summarize-story";
@@ -67,6 +68,21 @@ describe("AI selection and grounded explanation", () => {
     const result = await summarizeStory("economy", [cluster("cluster-1")], generator);
     expect(result).toHaveLength(1);
     expect(generator.generate).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry an external API failure", async () => {
+    const error = new APICallError({
+      message: "rate limited",
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      requestBodyValues: {},
+      statusCode: 429,
+    });
+    const generator = {
+      generate: vi.fn().mockRejectedValue(error),
+    } satisfies StructuredGenerator;
+
+    await expect(summarizeStory("economy", [cluster("cluster-1")], generator)).rejects.toBe(error);
+    expect(generator.generate).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a cluster outside candidates", async () => {

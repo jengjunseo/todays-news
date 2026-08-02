@@ -80,6 +80,19 @@ describe("three daily nudges", () => {
     expect(mock.generate).toHaveBeenCalledTimes(1);
   });
 
+  it("does not retry an aborted external call", async () => {
+    const error = new Error("The operation was aborted due to timeout");
+    error.name = "AbortError";
+    const mock = {
+      generate: vi.fn().mockRejectedValue(error),
+    } satisfies StructuredGenerator;
+
+    await expect(
+      generateDailyNudges({ sourceDate: "2026-08-01", items }, mock),
+    ).rejects.toBe(error);
+    expect(mock.generate).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects an invalid item ID", async () => {
     const invalidItem = output({ morning: { ...output().morning, primaryItemId: "missing" } });
     await expect(
