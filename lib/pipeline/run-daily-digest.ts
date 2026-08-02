@@ -72,12 +72,21 @@ export async function runDailyDigest(options: {
       options.nudgeGenerator,
     );
     logStage("deterministic_nudges_completed", { runKey });
+    const publishedClusterIds = new Set(items.map((item) => item.clusterId));
+    const publishedClusters = clusters.filter((cluster) => publishedClusterIds.has(cluster.id));
+    const publishedArticles = [
+      ...new Map(
+        publishedClusters
+          .flatMap((cluster) => cluster.articles)
+          .map((article) => [article.id, article]),
+      ).values(),
+    ];
     const readingMinutes = Math.max(3, Math.ceil(items.length * 0.9));
     logStage("publish_started", { runKey });
     const digest = await publisher.publish({
       sourceDate,
-      articles,
-      clusters,
+      articles: publishedArticles,
+      clusters: publishedClusters,
       items,
       nudges,
       readingMinutes,

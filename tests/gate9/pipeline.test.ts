@@ -16,7 +16,14 @@ describe("idempotent daily pipeline", () => {
     expect(first.status).toBe("published");
     expect(second.status).toBe("skipped");
     expect(publisher.published.size).toBe(1);
-    expect(publisher.published.get("2026-08-01")?.nudges).toHaveLength(3);
+    const published = publisher.published.get("2026-08-01")!;
+    expect(published.nudges).toHaveLength(3);
+    expect(new Set(published.clusters.map((cluster) => cluster.id))).toEqual(
+      new Set(published.items.map((item) => item.clusterId)),
+    );
+    expect(new Set(published.articles.map((article) => article.id))).toEqual(
+      new Set(published.clusters.flatMap((cluster) => cluster.articles.map((article) => article.id))),
+    );
   });
 
   it("keeps the last published digest when forced generation fails", async () => {
