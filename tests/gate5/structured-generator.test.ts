@@ -50,11 +50,11 @@ describe("AiSdkStructuredGenerator", () => {
     expect(mocks.generateText).toHaveBeenCalledWith({
       model: openrouterModel,
       maxRetries: 0,
-      timeout: { totalMs: 30_000 },
+      timeout: { totalMs: 90_000 },
       maxOutputTokens: 4096,
       providerOptions: {
         openrouter: {
-          reasoning: { effort: "low", exclude: true },
+          reasoning: { effort: "none", exclude: true },
         },
       },
       output: outputFormat,
