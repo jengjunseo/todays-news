@@ -54,7 +54,7 @@ describe("AiSdkStructuredGenerator", () => {
       maxOutputTokens: 4096,
       providerOptions: {
         openrouter: {
-          reasoning: { effort: "none", exclude: true },
+          reasoning: { effort: "low", exclude: true },
         },
       },
       output: outputFormat,

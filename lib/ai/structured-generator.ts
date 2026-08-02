@@ -68,7 +68,7 @@ export class AiSdkStructuredGenerator implements StructuredGenerator {
       maxOutputTokens: 4096,
       providerOptions: {
         openrouter: {
-          reasoning: { effort: "none", exclude: true },
+          reasoning: { effort: "low", exclude: true },
         } satisfies OpenRouterProviderOptions,
       },
       output: Output.object({ schema: input.schema }),
