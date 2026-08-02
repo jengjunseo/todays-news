@@ -40,6 +40,14 @@ describe("AiSdkStructuredGenerator", () => {
     expect(mocks.object).toHaveBeenCalledWith({ schema });
     expect(mocks.generateText).toHaveBeenCalledWith({
       model: googleModel,
+      maxRetries: 0,
+      timeout: { totalMs: 60_000 },
+      maxOutputTokens: 4096,
+      providerOptions: {
+        google: {
+          thinkingConfig: { thinkingLevel: "minimal" },
+        },
+      },
       output: outputFormat,
       prompt: "Return true.",
     });

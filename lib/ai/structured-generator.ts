@@ -1,4 +1,4 @@
-import { google } from "@ai-sdk/google";
+import { google, type GoogleLanguageModelOptions } from "@ai-sdk/google";
 import { generateText, Output } from "ai";
 import type { z } from "zod";
 
@@ -21,6 +21,14 @@ export class AiSdkStructuredGenerator implements StructuredGenerator {
 
     const { output } = await generateText({
       model: google(model),
+      maxRetries: 0,
+      timeout: { totalMs: 60_000 },
+      maxOutputTokens: 4096,
+      providerOptions: {
+        google: {
+          thinkingConfig: { thinkingLevel: "minimal" },
+        } satisfies GoogleLanguageModelOptions,
+      },
       output: Output.object({ schema: input.schema }),
       prompt: input.correction
         ? `${input.prompt}\n\n이전 응답 수정 지시:\n${input.correction}`
