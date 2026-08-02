@@ -14,3 +14,16 @@ describe("demo mode setup diagnostics", () => {
     expect(serialized).not.toContain("do-not-expose");
   });
 });
+
+describe("production setup diagnostics", () => {
+  it("recognizes Vercel OIDC as AI Gateway authentication", async () => {
+    vi.stubEnv("DEMO_MODE", "false");
+    vi.stubEnv("AI_MODEL", "openai/gpt-5.4-mini");
+    vi.stubEnv("AI_GATEWAY_API_KEY", "");
+    vi.stubEnv("VERCEL", "1");
+
+    const diagnostics = await getSetupDiagnostics();
+
+    expect(diagnostics.ai).toBe("설정됨");
+  });
+});

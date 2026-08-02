@@ -28,7 +28,10 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
       process.env.NAVER_API_HUB_CLIENT_ID && process.env.NAVER_API_HUB_CLIENT_SECRET
         ? "설정됨"
         : "설정 안됨",
-    ai: process.env.AI_MODEL && process.env.AI_GATEWAY_API_KEY ? "설정됨" : "설정 안됨",
+    ai:
+      process.env.AI_MODEL && (process.env.AI_GATEWAY_API_KEY || process.env.VERCEL)
+        ? "설정됨"
+        : "설정 안됨",
     push:
       process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
         ? "확인 중"
