@@ -56,7 +56,24 @@ export const getCurrentDigest = cache(async () => {
       }),
     };
   });
-  const nudges = nudgeRows.map((row) => DailyNudgeSchema.parse(row));
+  const itemSourceIdsById = new Map(items.map((item) => [item.id, item.sourceIds]));
+  const nudges = nudgeRows.map((row) => {
+    const primaryItemId = String(row.primaryItemId);
+    const sourceIds = itemSourceIdsById.get(primaryItemId);
+    if (!sourceIds) {
+      throw new Error(`daily nudge의 primary item을 찾을 수 없습니다: ${primaryItemId}`);
+    }
+    const scheduledFor = new Date(String(row.scheduledFor));
+    if (Number.isNaN(scheduledFor.getTime())) {
+      throw new Error(`daily nudge의 scheduledFor가 유효하지 않습니다: ${String(row.scheduledFor)}`);
+    }
+    return DailyNudgeSchema.parse({
+      ...row,
+      primaryItemId,
+      sourceIds,
+      scheduledFor: scheduledFor.toISOString(),
+    });
+  });
   return {
     ...digest,
     status: "published" as const,
