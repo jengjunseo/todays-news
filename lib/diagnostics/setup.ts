@@ -29,7 +29,7 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
         ? "설정됨"
         : "설정 안됨",
     ai:
-      process.env.AI_MODEL && process.env.GOOGLE_GENERATIVE_AI_API_KEY
+      process.env.AI_MODEL && process.env.OPENROUTER_API_KEY
         ? "설정됨"
         : "설정 안됨",
     push:

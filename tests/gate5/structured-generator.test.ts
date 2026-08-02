@@ -3,11 +3,14 @@ import { z } from "zod";
 
 const mocks = vi.hoisted(() => ({
   generateText: vi.fn(),
-  google: vi.fn(),
+  createOpenRouter: vi.fn(),
+  chat: vi.fn(),
   object: vi.fn(),
 }));
 
-vi.mock("@ai-sdk/google", () => ({ google: mocks.google }));
+vi.mock("@openrouter/ai-sdk-provider", () => ({
+  createOpenRouter: mocks.createOpenRouter,
+}));
 vi.mock("ai", () => ({
   generateText: mocks.generateText,
   Output: { object: mocks.object },
@@ -18,15 +21,17 @@ import { AiSdkStructuredGenerator } from "@/lib/ai/structured-generator";
 describe("AiSdkStructuredGenerator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubEnv("AI_MODEL", "gemini-3.5-flash");
+    vi.stubEnv("AI_MODEL", "openai/gpt-oss-120b:free");
+    vi.stubEnv("OPENROUTER_API_KEY", "test-openrouter-key");
+    mocks.createOpenRouter.mockReturnValue({ chat: mocks.chat });
   });
 
-  it("uses the direct Google provider with structured output", async () => {
+  it("uses the direct OpenRouter provider with structured output", async () => {
     const schema = z.object({ ok: z.boolean() });
-    const googleModel = { provider: "google.generative-ai" };
+    const openrouterModel = { provider: "openrouter.chat" };
     const output = { ok: true };
     const outputFormat = { type: "object" };
-    mocks.google.mockReturnValue(googleModel);
+    mocks.chat.mockReturnValue(openrouterModel);
     mocks.object.mockReturnValue(outputFormat);
     mocks.generateText.mockResolvedValue({ output });
 
@@ -35,17 +40,21 @@ describe("AiSdkStructuredGenerator", () => {
       prompt: "Return true.",
     });
 
-    expect(mocks.google).toHaveBeenCalledOnce();
-    expect(mocks.google).toHaveBeenCalledWith("gemini-3.5-flash");
+    expect(mocks.createOpenRouter).toHaveBeenCalledWith({
+      apiKey: "test-openrouter-key",
+    });
+    expect(mocks.chat).toHaveBeenCalledWith("openai/gpt-oss-120b:free", {
+      provider: { require_parameters: true },
+    });
     expect(mocks.object).toHaveBeenCalledWith({ schema });
     expect(mocks.generateText).toHaveBeenCalledWith({
-      model: googleModel,
+      model: openrouterModel,
       maxRetries: 0,
       timeout: { totalMs: 60_000 },
       maxOutputTokens: 4096,
       providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: "minimal" },
+        openrouter: {
+          reasoning: { effort: "low", exclude: true },
         },
       },
       output: outputFormat,

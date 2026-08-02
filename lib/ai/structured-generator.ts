@@ -1,4 +1,7 @@
-import { google, type GoogleLanguageModelOptions } from "@ai-sdk/google";
+import {
+  createOpenRouter,
+  type OpenRouterProviderOptions,
+} from "@openrouter/ai-sdk-provider";
 import { generateText, Output } from "ai";
 import type { z } from "zod";
 
@@ -18,16 +21,22 @@ export class AiSdkStructuredGenerator implements StructuredGenerator {
   }) {
     const model = process.env.AI_MODEL;
     if (!model) throw new Error("AI_MODEL이 설정되지 않았습니다.");
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error("OPENROUTER_API_KEY가 설정되지 않았습니다.");
+
+    const openrouter = createOpenRouter({ apiKey });
 
     const { output } = await generateText({
-      model: google(model),
+      model: openrouter.chat(model, {
+        provider: { require_parameters: true },
+      }),
       maxRetries: 0,
       timeout: { totalMs: 60_000 },
       maxOutputTokens: 4096,
       providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: "minimal" },
-        } satisfies GoogleLanguageModelOptions,
+        openrouter: {
+          reasoning: { effort: "low", exclude: true },
+        } satisfies OpenRouterProviderOptions,
       },
       output: Output.object({ schema: input.schema }),
       prompt: input.correction
