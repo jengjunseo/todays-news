@@ -3,10 +3,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import type { StructuredGenerator } from "@/lib/ai/structured-generator";
-import {
-  AiSdkStructuredGenerator,
-  isExternalAiCallError,
-} from "@/lib/ai/structured-generator";
+import { isExternalAiCallError } from "@/lib/ai/structured-generator";
 import type { DigestItem } from "@/lib/digest/schemas";
 import { kstDateAtTime, nextKstDate } from "@/lib/time/kst";
 
@@ -222,11 +219,7 @@ export async function generateDailyNudges(
   generator?: StructuredGenerator,
 ) {
   if (input.items.length === 0) throw new Error("nudge를 만들 digest item이 없습니다.");
-  const activeGenerator =
-    generator ??
-    (process.env.DEMO_MODE === "true"
-      ? new FixtureNudgeGenerator(input.items)
-      : new AiSdkStructuredGenerator());
+  const activeGenerator = generator ?? new FixtureNudgeGenerator(input.items);
   const prompt = promptFor(input.items);
 
   try {

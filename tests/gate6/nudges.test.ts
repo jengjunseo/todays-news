@@ -62,6 +62,15 @@ function generator(outputs: unknown[]): StructuredGenerator & { generate: Return
 }
 
 describe("three daily nudges", () => {
+  it("uses deterministic nudges by default in production", async () => {
+    vi.stubEnv("DEMO_MODE", "false");
+
+    const result = await generateDailyNudges({ sourceDate: "2026-08-01", items });
+
+    expect(result.map((nudge) => nudge.type)).toEqual(["morning", "perspective", "evening"]);
+    vi.unstubAllEnvs();
+  });
+
   it("creates morning, perspective and evening in one call", async () => {
     const mock = generator([output()]);
     const result = await generateDailyNudges({ sourceDate: "2026-08-01", items }, mock);
