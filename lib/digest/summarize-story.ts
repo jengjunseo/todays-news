@@ -163,23 +163,45 @@ export async function summarizeStory(
       ? new FixtureSummaryGenerator(limitedCandidates, sources)
       : new AiSdkStructuredGenerator());
   const prompt = buildPrompt(category, limitedCandidates, sources);
+  const summaryStartedAt = Date.now();
+  const sourceDate = limitedCandidates[0]!.targetDate;
+  const logStage = (stage: string, details: Record<string, unknown> = {}) => {
+    console.log(JSON.stringify({ stage, sourceDate, category, elapsedMs: Date.now() - summaryStartedAt, ...details }));
+  };
 
   try {
-    const first = await activeGenerator.generate({
-      schema: AiDigestSelectionSchema,
-      prompt,
-    });
+    let first: unknown;
+    try {
+      first = await activeGenerator.generate({
+        schema: AiDigestSelectionSchema,
+        prompt,
+      });
+      logStage("category_first_ai_call_completed", { result: "success" });
+    } catch (firstCallError) {
+      logStage("category_first_ai_call_completed", {
+        result: "error",
+        errorType: firstCallError instanceof Error ? firstCallError.name : typeof firstCallError,
+      });
+      throw firstCallError;
+    }
     return validateGrounding(first, category, limitedCandidates, sources);
   } catch (firstError) {
     if (isExternalAiCallError(firstError)) throw firstError;
+    logStage("category_correction_started");
     try {
       const second = await activeGenerator.generate({
         schema: AiDigestSelectionSchema,
         prompt,
         correction: `스키마와 grounding 규칙을 지키세요. 오류: ${firstError instanceof Error ? firstError.message : "invalid response"}`,
       });
-      return validateGrounding(second, category, limitedCandidates, sources);
+      const corrected = validateGrounding(second, category, limitedCandidates, sources);
+      logStage("category_correction_completed", { result: "success" });
+      return corrected;
     } catch (secondError) {
+      logStage("category_correction_completed", {
+        result: "error",
+        errorType: secondError instanceof Error ? secondError.name : typeof secondError,
+      });
       throw new Error(
         `${CATEGORY_LABEL[category]} 요약/grounding 실패: ${secondError instanceof Error ? secondError.message : "invalid response"}`,
         { cause: secondError },
