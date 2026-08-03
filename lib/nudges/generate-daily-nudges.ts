@@ -41,7 +41,7 @@ export const DailyNudgeSchema = BaseNudgeSchema.extend({
   secondaryItemId: z.string().nullable(),
   perspectiveType: PerspectiveTypeSchema.nullable(),
   scheduledFor: z.string().datetime(),
-  status: z.literal("pending"),
+  status: z.enum(["pending", "sent", "skipped", "failed"]),
 });
 
 export type DailyNudge = z.infer<typeof DailyNudgeSchema>;
