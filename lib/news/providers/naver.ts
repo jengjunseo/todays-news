@@ -11,13 +11,22 @@ const NaverResponseSchema = z.object({
   items: z.array(
     z.object({
       title: z.string(),
-      originallink: z.string().url(),
-      link: z.string().url(),
+      originallink: z.string(),
+      link: z.string(),
       description: z.string(),
       pubDate: z.string().min(1),
     }),
   ),
 });
+
+function usableHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 export class NaverNewsProvider implements NewsProvider {
   readonly name = "naver";
@@ -33,6 +42,7 @@ export class NaverNewsProvider implements NewsProvider {
     }
 
     const collected = [];
+    let malformedItemCount = 0;
     for (let page = 0; page < NAVER_MAX_PAGES_PER_QUERY; page += 1) {
       const start = page * NAVER_PAGE_SIZE + 1;
       const url = new URL("https://naverapihub.apigw.ntruss.com/search/v1/news");
@@ -56,6 +66,10 @@ export class NaverNewsProvider implements NewsProvider {
       const parsed = NaverResponseSchema.parse(await response.json());
       let foundOlderArticle = false;
       for (const item of parsed.items) {
+        const originalLink = usableHttpUrl(item.originallink);
+        const providerLink = usableHttpUrl(item.link);
+        if (!originalLink || !providerLink) malformedItemCount += 1;
+        if (!originalLink && !providerLink) continue;
         const publishedAt = new Date(item.pubDate);
         if (Number.isNaN(publishedAt.getTime())) continue;
         const onTargetDate = isOnKstDate(publishedAt, input.sourceDate);
@@ -64,8 +78,8 @@ export class NaverNewsProvider implements NewsProvider {
             RawNewsArticleSchema.parse({
               title: item.title,
               description: item.description,
-              originalLink: item.originallink,
-              providerLink: item.link,
+              originalLink: originalLink ?? providerLink,
+              providerLink: providerLink ?? originalLink,
               publishedAt,
             }),
           );
@@ -77,6 +91,15 @@ export class NaverNewsProvider implements NewsProvider {
       if (foundOlderArticle || parsed.items.length < NAVER_PAGE_SIZE || start + NAVER_PAGE_SIZE > 1000) {
         break;
       }
+    }
+    if (malformedItemCount > 0) {
+      console.log(JSON.stringify({
+        event: "naver_malformed_items",
+        category: input.category,
+        query: input.query,
+        sourceDate: input.sourceDate,
+        count: malformedItemCount,
+      }));
     }
     return collected;
   }
