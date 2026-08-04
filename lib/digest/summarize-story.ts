@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { APICallError } from "ai";
 
 import type { StructuredGenerator } from "@/lib/ai/structured-generator";
 import {
@@ -20,6 +21,26 @@ const CATEGORY_LABEL: Record<NewsCategory, string> = {
   technology: "IT·정보",
   economy: "경제",
 };
+
+function truncatedLogText(value: unknown, limit: number) {
+  if (value == null) return undefined;
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.slice(0, limit);
+}
+
+function aiErrorLogDetails(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) return { errorType: typeof error };
+  const details: Record<string, unknown> = {
+    errorName: error.name,
+    errorMessage: truncatedLogText(error.message, 300),
+  };
+  if (APICallError.isInstance(error)) {
+    details.statusCode = error.statusCode;
+    const responseBody = truncatedLogText(error.responseBody, 500);
+    if (responseBody) details.responseBody = responseBody;
+  }
+  return details;
+}
 
 type GroundedSource = {
   id: string;
@@ -180,7 +201,7 @@ export async function summarizeStory(
     } catch (firstCallError) {
       logStage("category_first_ai_call_completed", {
         result: "error",
-        errorType: firstCallError instanceof Error ? firstCallError.name : typeof firstCallError,
+        ...aiErrorLogDetails(firstCallError),
       });
       throw firstCallError;
     }
@@ -200,7 +221,7 @@ export async function summarizeStory(
     } catch (secondError) {
       logStage("category_correction_completed", {
         result: "error",
-        errorType: secondError instanceof Error ? secondError.name : typeof secondError,
+        ...aiErrorLogDetails(secondError),
       });
       throw new Error(
         `${CATEGORY_LABEL[category]} 요약/grounding 실패: ${secondError instanceof Error ? secondError.message : "invalid response"}`,

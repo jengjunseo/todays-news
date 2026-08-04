@@ -71,11 +71,13 @@ describe("AI selection and grounded explanation", () => {
   });
 
   it("does not retry an external API failure", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const error = new APICallError({
       message: "rate limited",
       url: "https://openrouter.ai/api/v1/chat/completions",
       requestBodyValues: {},
       statusCode: 429,
+      responseBody: '{"error":{"message":"rate limit reached"}}',
     });
     const generator = {
       generate: vi.fn().mockRejectedValue(error),
@@ -83,6 +85,17 @@ describe("AI selection and grounded explanation", () => {
 
     await expect(summarizeStory("economy", [cluster("cluster-1")], generator)).rejects.toBe(error);
     expect(generator.generate).toHaveBeenCalledTimes(1);
+    const errorLog = logSpy.mock.calls
+      .map(([entry]) => JSON.parse(String(entry)))
+      .find((entry) => entry.stage === "category_first_ai_call_completed");
+    expect(errorLog).toMatchObject({
+      result: "error",
+      errorName: "AI_APICallError",
+      errorMessage: "rate limited",
+      statusCode: 429,
+      responseBody: '{"error":{"message":"rate limit reached"}}',
+    });
+    logSpy.mockRestore();
   });
 
   it("rejects a cluster outside candidates", async () => {
