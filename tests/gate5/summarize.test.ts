@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { APICallError } from "ai";
 
 import type { StructuredGenerator } from "@/lib/ai/structured-generator";
-import { summarizeStory } from "@/lib/digest/summarize-story";
+import { createFallbackDigestItem, summarizeStory } from "@/lib/digest/summarize-story";
 import type { StoryCluster } from "@/lib/news/cluster";
 
 function cluster(id: string, category: StoryCluster["category"] = "economy"): StoryCluster {
@@ -95,7 +95,8 @@ describe("AI selection and grounded explanation", () => {
     ]);
     expect(prompts[1]).toBe(prompts[0]);
     expect(prompts[0]).toContain("작동 구조를 1~2단계 설명하세요");
-    expect(prompts[0]).toContain("trade-off, incentive, second-order effect, verification");
+    expect(prompts[0]).toContain("현재 카드만 읽어도 생각을 시작할 수 있도록");
+    expect(prompts[0]).toContain("영어 메타어를 질문에 그대로 쓰지 마세요");
   });
 
   it("accepts a valid schema and assigns category rank", async () => {
@@ -173,5 +174,35 @@ describe("AI selection and grounded explanation", () => {
       "경제 요약/grounding 실패",
     );
     expect(generator.generate).toHaveBeenCalledTimes(2);
+  });
+
+  it("creates readable fallback fields without truncation, repetition, or source-count metadata", () => {
+    const candidate = cluster("fallback-quality");
+    candidate.sourceCount = 9;
+    candidate.representativeTitle = "지역 기업이 새로운 운영 계획을 발표했다";
+    candidate.articles = [
+      {
+        ...candidate.articles[0]!,
+        id: "fallback-a".padEnd(32, "0"),
+        title: candidate.representativeTitle,
+        description: "회사는 기존 사업의 운영 방식을 다음 달부터 단계적으로 바꾸겠다고 밝혔다. 적용 대상은 일부 지역부터 시작된다.",
+      },
+      {
+        ...candidate.articles[1]!,
+        id: "fallback-b".padEnd(32, "0"),
+        title: "운영 계획의 적용 대상 공개",
+        description: "첫 적용 지역과 구체적인 일정은 후속 공지에서 공개될 예정이다.",
+      },
+    ];
+
+    const item = createFallbackDigestItem("economy", candidate);
+    const fields = [item.oneLine, item.overview, ...item.keyPoints, item.analogy];
+    const normalized = fields.map((value) => value.replace(/[^\p{L}\p{N}]/gu, ""));
+
+    expect(item.whyItMatters).not.toContain("9개 출처");
+    expect(new Set(normalized).size).toBe(normalized.length);
+    expect(fields.every((value) => !value.endsWith("밝혔"))).toBe(true);
+    expect(item.socraticQuestion).toContain(item.oneLine);
+    expect(item.socraticQuestion).not.toMatch(/trade-off|incentive|second-order effect|verification/i);
   });
 });

@@ -173,14 +173,18 @@ export const getPublishedDigestBySourceDate = cache(
 );
 
 export async function listPublishedDigests() {
+  const startedAt = Date.now();
   if (isDemoMode()) {
     const digest = await getDemoDigest();
+    logReadTiming("archive_list_total_ms", startedAt, 1);
     return [digest];
   }
   const sql = getPostgres();
-  return sql<Array<{ id: string; sourceDate: string; itemCount: number; readingMinutes: number }>>`
+  const digests = await sql<Array<{ id: string; sourceDate: string; itemCount: number; readingMinutes: number }>>`
     select id::text, source_date::text as "sourceDate", item_count as "itemCount",
       reading_minutes as "readingMinutes"
     from daily_digests where status = 'published' order by source_date desc
   `;
+  logReadTiming("archive_list_total_ms", startedAt, digests.length);
+  return digests;
 }

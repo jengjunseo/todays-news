@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 export const NAV_ITEMS = [
   { href: "/", label: "오늘" },
@@ -30,11 +31,38 @@ export function BottomNavigation() {
               data-active={active}
               aria-current={active ? "page" : undefined}
             >
-              {item.label}
+              <NavLabel href={item.href} label={item.label} />
             </Link>
           );
         })}
       </div>
     </nav>
   );
+}
+
+function NavLabel({ href, label }: { href: string; label: string }) {
+  const { pending } = useLinkStatus();
+  const startedAt = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (pending && startedAt.current === null) {
+      startedAt.current = performance.now();
+      console.log(JSON.stringify({
+        stage: "navigation_started",
+        fromPath: window.location.pathname,
+        toPath: href,
+      }));
+      return;
+    }
+    if (!pending && startedAt.current !== null) {
+      console.log(JSON.stringify({
+        stage: "navigation_completed",
+        toPath: href,
+        elapsedMs: Math.round(performance.now() - startedAt.current),
+      }));
+      startedAt.current = null;
+    }
+  }, [href, pending]);
+
+  return <span className="nav-label" data-pending={pending}>{label}</span>;
 }

@@ -8,14 +8,15 @@ export function NewsCard({
   item,
   categoryLabel,
   read,
-  onOpen,
+  expanded,
+  onToggle,
 }: {
   item: DigestItemWithSources;
   categoryLabel: string;
   read: boolean;
-  onOpen: () => void;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const [reflection, setReflection] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const hydrated = useRef(false);
@@ -44,15 +45,9 @@ export function NewsCard({
     return () => window.clearTimeout(timer);
   }, [draftKey, item.id, reflection]);
 
-  function toggle() {
-    const next = !expanded;
-    setExpanded(next);
-    if (next && !read) onOpen();
-  }
-
   return (
     <article className="news-card" data-expanded={expanded}>
-      <button className="news-card__summary" type="button" onClick={toggle} aria-expanded={expanded}>
+      <button className="news-card__summary" type="button" onClick={onToggle} aria-expanded={expanded}>
         <span className="card-meta">
           <span className="category-pill">{categoryLabel}</span>
           {read ? <span className="read-mark">읽음</span> : null}

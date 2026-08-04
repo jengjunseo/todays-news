@@ -90,27 +90,97 @@ function selectPromptArticles(cluster: StoryCluster) {
   return selected;
 }
 
-function limitedText(value: string, maxLength: number) {
-  return value.trim().slice(0, maxLength);
+function normalizedText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
 }
+
+function textKey(value: string) {
+  return normalizedText(value).toLocaleLowerCase("ko-KR").replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function distinctTexts(values: string[]) {
+  const selected: string[] = [];
+  const keys: string[] = [];
+  for (const value of values) {
+    const text = normalizedText(value);
+    const key = textKey(text);
+    if (
+      !key ||
+      keys.some(
+        (existing) =>
+          existing === key ||
+          (Math.min(existing.length, key.length) > 30 &&
+            (existing.includes(key) || key.includes(existing))),
+      )
+    ) {
+      continue;
+    }
+    selected.push(text);
+    keys.push(key);
+  }
+  return selected;
+}
+
+function boundedText(value: string, maxLength: number, fallback: string) {
+  const text = normalizedText(value);
+  if (text.length <= maxLength) return text;
+
+  const sentences = text.match(/[^.!?。]+[.!?。]+/g) ?? [];
+  let complete = "";
+  for (const sentence of sentences) {
+    const next = `${complete} ${sentence.trim()}`.trim();
+    if (next.length > maxLength) break;
+    complete = next;
+  }
+  if (complete) return complete;
+
+  const safeFallback = normalizedText(fallback);
+  if (safeFallback && safeFallback.length <= maxLength) return safeFallback;
+  const boundary = text.lastIndexOf(" ", maxLength - 1);
+  const end = boundary > Math.floor(maxLength * 0.6) ? boundary : maxLength - 1;
+  return `${text.slice(0, end).trimEnd()}…`;
+}
+
+const FALLBACK_WHY_IT_MATTERS: Record<NewsCategory, string> = {
+  politics: "정책과 공공 결정은 시민이 이용하는 제도와 자원 배분에 영향을 줄 수 있어 실제 적용 범위를 확인할 필요가 있습니다.",
+  society: "사회 제도와 안전·복지의 변화는 일상에서 이용할 수 있는 지원과 책임의 범위를 바꿀 수 있어 후속 결과가 중요합니다.",
+  science: "연구 결과는 후속 검증을 거쳐야 지식이나 기술의 근거가 되므로 재현 여부와 적용 범위를 함께 봐야 합니다.",
+  technology: "기술 변화는 서비스 선택, 비용, 개인정보와 연결될 수 있어 실제 제공 범위와 이용 조건을 확인할 필요가 있습니다.",
+  economy: "경제 결정은 물가, 일자리, 대출과 소비 여건에 이어질 수 있어 발표 뒤 실제 수치가 어떻게 움직이는지 살펴봐야 합니다.",
+};
 
 export function createFallbackDigestItem(
   category: NewsCategory,
   cluster: StoryCluster,
 ): DigestItem {
   const articles = [...cluster.articles].sort((left, right) => left.id.localeCompare(right.id));
-  const descriptions = [...new Set(
-    articles.map((article) => article.description.trim()).filter(Boolean),
-  )];
-  const oneLine = limitedText(descriptions[0] ?? cluster.representativeTitle, 180);
-  const overview = limitedText(
-    descriptions.slice(0, 2).join(" ") || cluster.representativeTitle,
+  const headline = boundedText(cluster.representativeTitle, 120, "핵심 뉴스");
+  const facts = distinctTexts([
+    ...articles.map((article) => article.description),
+    ...articles.map((article) => article.title),
+  ]).filter((text) => textKey(text) !== textKey(headline));
+  const oneLine = boundedText(facts[0] ?? headline, 180, headline);
+  const remainingFacts = facts.filter((text) => textKey(text) !== textKey(oneLine));
+  const overview = boundedText(
+    remainingFacts[0] ?? `${headline}와 관련한 보도가 나왔습니다. 구체적인 범위와 결과는 후속 보도로 확인해야 합니다.`,
     1200,
+    headline,
   );
-  const factualPoints = [...new Set(
-    articles.flatMap((article) => [article.title.trim(), article.description.trim()]).filter(Boolean),
-  )].slice(0, 3);
-  while (factualPoints.length < 2) factualPoints.push(factualPoints[0] ?? cluster.representativeTitle);
+  const keyPoints = distinctTexts(remainingFacts.slice(1)).slice(0, 3);
+  const verificationPoints = [
+    "현재 확인된 사실은 기사 제목과 공개된 보도 내용의 범위로 제한됩니다.",
+    "구체적인 적용 범위와 실제 결과는 후속 보도로 확인해야 합니다.",
+  ];
+  for (const point of verificationPoints) {
+    if (keyPoints.length >= 2) break;
+    if (!keyPoints.some((existing) => textKey(existing) === textKey(point))) keyPoints.push(point);
+  }
+  const analogyFact = remainingFacts.find(
+    (fact) => !keyPoints.some((point) => textKey(point) === textKey(fact)),
+  );
+  const analogy = analogyFact
+    ? `쉽게 말해, ${boundedText(analogyFact, 470, "보도된 내용과 실제로 나타난 결과는 구분해서 봐야 합니다.")}`
+    : "쉽게 말해, 보도된 발표와 실제로 나타난 결과는 구분해서 봐야 합니다.";
 
   return DigestItemSchema.parse({
     id: createHash("sha256")
@@ -120,16 +190,19 @@ export function createFallbackDigestItem(
     clusterId: cluster.id,
     category,
     rank: 1,
-    headline: limitedText(cluster.representativeTitle, 120),
+    headline,
     oneLine,
     overview,
-    keyPoints: factualPoints.map((point) => limitedText(point, 240)),
-    analogy: limitedText(`쉽게 보면 지금 확인된 핵심 변화는 ${oneLine}`, 500),
-    whyItMatters: limitedText(
-      `${cluster.sourceCount}개 출처의 보도에서 확인된 사건입니다. 실제 영향 범위는 후속 발표와 적용 내용을 통해 확인해야 합니다.`,
-      800,
+    keyPoints: keyPoints.map((point, index) =>
+      boundedText(point, 240, verificationPoints[index % verificationPoints.length]!),
     ),
-    socraticQuestion: "이 발표가 실제 변화로 이어졌는지 확인하려면 앞으로 어떤 지표를 봐야 할까요?",
+    analogy: boundedText(analogy, 500, headline),
+    whyItMatters: FALLBACK_WHY_IT_MATTERS[category],
+    socraticQuestion: boundedText(
+      `“${oneLine}” 상황에서 실제 영향을 먼저 받는 사람이나 조직은 누구일까요? 카드의 어떤 사실이 그 판단을 뒷받침하나요?`,
+      300,
+      `“${headline}”의 실제 영향을 판단할 때 카드에서 어떤 사실을 근거로 삼을 수 있을까요?`,
+    ),
     factStatus: "reported",
     confidence: cluster.sourceCount >= 2 ? 0.65 : 0.5,
     sourceIds: selectPromptArticles(cluster).map((article) => article.id),
@@ -148,7 +221,9 @@ function buildPrompt(
 
 고등학교 상위권 학생부터 대학 교양 입문자가 쉽게 읽되 내용은 얕지 않은 차분한 한국어로 쓰세요. "중요하다"거나 "경쟁력이 높아진다"는 결론만 쓰지 말고, 입력 출처에 근거가 있을 때 왜 그런지 작동 구조를 1~2단계 설명하세요. 숫자·기간·제도·이해관계자·비용·공급망·기술적 제약·정책 조건이 기사에 있다면 우선 활용하되 없는 정보는 만들지 마세요.
 
-overview는 무슨 일이 있었는지와 그 의미가 생기는 구조를 함께 설명하세요. keyPoints는 overview를 반복하지 말고 결정/사실, 작동 조건, 다음 확인 변수처럼 서로 다른 역할을 갖게 하세요. 필요한 전문용어 1~2개는 처음에 짧게 뜻을 붙일 수 있습니다. analogy는 억지 비유 대신 실제 구조를 쉬운 말로 다시 설명해도 됩니다. whyItMatters는 실제 관련된 개인·기업·정부·시장·과학기술 주체 중 누구의 무엇이 달라질 수 있는지 구체화하세요. socraticQuestion은 감상이 아니라 trade-off, incentive, second-order effect, verification 중 하나 이상을 생각하게 하세요.
+overview는 무슨 일이 있었는지와 그 의미가 생기는 구조를 함께 설명하세요. keyPoints는 overview를 반복하지 말고 결정/사실, 작동 조건, 다음 확인 변수처럼 서로 다른 역할을 갖게 하세요. 필요한 전문용어 1~2개는 처음에 짧게 뜻을 붙일 수 있습니다. analogy는 억지 비유 대신 실제 구조를 쉬운 말로 다시 설명해도 됩니다. whyItMatters는 실제 관련된 개인·기업·정부·시장·과학기술 주체 중 누구의 무엇이 달라질 수 있는지 구체화하세요. 각 필드에서 같은 문장을 반복하거나 길이 한도에 맞추려고 문장을 중간에서 자르지 마세요.
+
+socraticQuestion은 현재 카드만 읽어도 생각을 시작할 수 있도록 질문 안에 핵심 사실이나 상황을 짧게 포함하세요. 선택의 득실, 각 주체의 행동 동기, 뒤따를 영향, 실제 변화 여부 중 하나를 구체적으로 묻되 trade-off, incentive, second-order effect, verification 같은 영어 메타어를 질문에 그대로 쓰지 마세요. 추가 검색이 필요한 논술 문제가 아니라 카드의 사실을 근거로 답할 수 있는 한두 문장 질문이어야 합니다.
 
 사실·주장·전망을 구분하고, 정치적 편향 표현을 피하세요. 과학의 초기 연구·경제 전망·기업 발표는 확정 사실처럼 쓰지 마세요. 같은 분량에서 정보 밀도를 높이고 기존 schema 길이 한도를 지키세요.
 

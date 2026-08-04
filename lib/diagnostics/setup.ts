@@ -11,8 +11,9 @@ export type SetupDiagnostics = {
 };
 
 export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
+  const startedAt = Date.now();
   if (isDemoMode()) {
-    return {
+    const diagnostics = {
       database: "데모 저장소",
       newsApi: "데모 fixture",
       ai: "데모 출력",
@@ -20,6 +21,8 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
       scheduler: "시뮬레이션 가능",
       lastDigest: "데모 생성됨",
     };
+    console.log(JSON.stringify({ stage: "settings_diagnostics_total_ms", elapsedMs: Date.now() - startedAt, rowCount: 0 }));
+    return diagnostics;
   }
 
   const base: SetupDiagnostics = {
@@ -39,7 +42,10 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
     scheduler: "실행 기록 없음",
     lastDigest: "없음",
   };
-  if (!process.env.DATABASE_URL) return base;
+  if (!process.env.DATABASE_URL) {
+    console.log(JSON.stringify({ stage: "settings_diagnostics_total_ms", elapsedMs: Date.now() - startedAt, rowCount: 0 }));
+    return base;
+  }
 
   try {
     const sql = getPostgres();
@@ -56,7 +62,7 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
         select count(*)::int as count from push_subscriptions where revoked_at is null
       `,
     ]);
-    return {
+    const diagnostics = {
       ...base,
       database: "정상",
       push: subscriptions[0]?.count ? "구독됨" : "구독 안됨",
@@ -65,7 +71,10 @@ export async function getSetupDiagnostics(): Promise<SetupDiagnostics> {
         : "실행 기록 없음",
       lastDigest: digests[0]?.publishedAt ?? "없음",
     };
+    console.log(JSON.stringify({ stage: "settings_diagnostics_total_ms", elapsedMs: Date.now() - startedAt, rowCount: 3 }));
+    return diagnostics;
   } catch {
+    console.log(JSON.stringify({ stage: "settings_diagnostics_total_ms", elapsedMs: Date.now() - startedAt, rowCount: 0 }));
     return { ...base, database: "연결 오류", push: "확인 불가" };
   }
 }
