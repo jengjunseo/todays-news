@@ -16,11 +16,10 @@ describe("demo mode setup diagnostics", () => {
 });
 
 describe("production setup diagnostics", () => {
-  it("recognizes Google Generative AI authentication", async () => {
+  it("recognizes OpenRouter authentication", async () => {
     vi.stubEnv("DEMO_MODE", "false");
-    vi.stubEnv("AI_MODEL", "gemini-3.5-flash");
-    vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "do-not-expose-google-secret");
-    vi.stubEnv("AI_GATEWAY_API_KEY", "");
+    vi.stubEnv("AI_MODEL", "openai/gpt-oss-120b:free");
+    vi.stubEnv("OPENROUTER_API_KEY", "do-not-expose-openrouter-secret");
     vi.stubEnv("VERCEL", "1");
 
     const diagnostics = await getSetupDiagnostics();

@@ -22,6 +22,16 @@ export function previousKstDate(now = new Date()) {
   return toKstDateKey(new Date(Date.UTC(year, month - 1, day - 1, 12)));
 }
 
+export function isDigestStale(sourceDate: string | null | undefined, now = new Date()) {
+  return sourceDate ? sourceDate < previousKstDate(now) : false;
+}
+
+export function isValidKstDateKey(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00+09:00`);
+  return !Number.isNaN(date.getTime()) && toKstDateKey(date) === value;
+}
+
 export function nextKstDate(sourceDate: string) {
   const [year, month, day] = sourceDate.split("-").map(Number);
   return toKstDateKey(new Date(Date.UTC(year, month - 1, day + 1, 12)));

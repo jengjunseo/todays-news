@@ -14,7 +14,15 @@ const CATEGORY_LABEL: Record<NewsCategory, string> = {
   economy: "경제",
 };
 
-export function DigestView({ items, sourceDate }: { items: DigestItemWithSources[]; sourceDate: string }) {
+export function DigestView({
+  items,
+  sourceDate,
+  persistAsCurrent = true,
+}: {
+  items: DigestItemWithSources[];
+  sourceDate: string;
+  persistAsCurrent?: boolean;
+}) {
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -23,6 +31,7 @@ export function DigestView({ items, sourceDate }: { items: DigestItemWithSources
   }, []);
 
   useEffect(() => {
+    if (!persistAsCurrent) return;
     localStorage.setItem(
       "yesterday-core:last-digest",
       JSON.stringify({
@@ -30,7 +39,7 @@ export function DigestView({ items, sourceDate }: { items: DigestItemWithSources
         items: items.map((item) => ({ id: item.id, category: item.category, headline: item.headline, oneLine: item.oneLine })),
       }),
     );
-  }, [items, sourceDate]);
+  }, [items, persistAsCurrent, sourceDate]);
 
   const progress = items.length === 0 ? 0 : Math.round((readIds.size / items.length) * 100);
   const grouped = useMemo(

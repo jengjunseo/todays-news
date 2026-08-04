@@ -13,7 +13,7 @@ export default async function ArchivePage() {
       <p className="lede">발행된 브리핑을 날짜 순으로 다시 봅니다.</p>
       <div className="archive-list">
         {digests.map((digest) => (
-          <Link href="/" className="archive-row" key={digest.id}>
+          <Link href={`/archive/${digest.sourceDate}`} className="archive-row" key={digest.id}>
             <span><strong>{digest.sourceDate}</strong><small>{digest.itemCount}개 핵심 · 약 {digest.readingMinutes}분</small></span>
             <span aria-hidden="true">→</span>
           </Link>

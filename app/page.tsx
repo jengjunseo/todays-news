@@ -1,6 +1,7 @@
 import { DigestView } from "@/components/digest-view";
 import { requirePageSession } from "@/lib/auth/page-guard";
 import { getCurrentDigest } from "@/lib/digest/read-digest";
+import { isDigestStale } from "@/lib/time/kst";
 
 const KOREAN_DATE = new Intl.DateTimeFormat("ko-KR", {
   month: "long",
@@ -21,6 +22,8 @@ export default async function TodayPage() {
     );
   }
 
+  const stale = isDigestStale(digest.sourceDate);
+
   return (
     <section className="page-stack today-page" aria-labelledby="today-title">
       <header className="today-header">
@@ -30,6 +33,11 @@ export default async function TodayPage() {
         </div>
         <span className="reading-time">약 {digest.readingMinutes}분</span>
       </header>
+      {stale ? (
+        <p className="save-note" role="status">
+          최신 브리핑 준비 중 · 현재 {KOREAN_DATE.format(new Date(`${digest.sourceDate}T12:00:00+09:00`))} 뉴스 표시
+        </p>
+      ) : null}
       <DigestView items={digest.items} sourceDate={digest.sourceDate} />
     </section>
   );

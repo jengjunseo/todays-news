@@ -1,12 +1,12 @@
 import { requirePageSession } from "@/lib/auth/page-guard";
-import { getCurrentDigest } from "@/lib/digest/read-digest";
+import { getCurrentInsightDigest } from "@/lib/digest/read-digest";
 
 const TYPE_LABEL = { morning: "Morning", perspective: "Perspective", evening: "Evening" } as const;
 const TIME_LABEL = { morning: "07:30", perspective: "12:40", evening: "18:30" } as const;
 
 export default async function InsightsPage() {
   await requirePageSession();
-  const digest = await getCurrentDigest();
+  const digest = await getCurrentInsightDigest();
   if (!digest) {
     return (
       <section className="page-stack">
