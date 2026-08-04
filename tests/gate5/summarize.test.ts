@@ -53,6 +53,51 @@ function mockGenerator(outputs: unknown[]): StructuredGenerator & { generate: Re
 }
 
 describe("AI selection and grounded explanation", () => {
+  it("limits prompt sources to three distinct domains deterministically", async () => {
+    const candidate = cluster("cluster-many");
+    candidate.articles = [
+      ...["1", "2", "3"].map((suffix) => ({
+        ...candidate.articles[0]!,
+        id: `a${suffix}`.padEnd(32, "0"),
+        sourceDomain: "a.example",
+        canonicalUrl: `https://a.example/${suffix}`,
+      })),
+      {
+        ...candidate.articles[0]!,
+        id: "b1".padEnd(32, "0"),
+        sourceDomain: "b.example",
+        canonicalUrl: "https://b.example/1",
+      },
+      {
+        ...candidate.articles[0]!,
+        id: "c1".padEnd(32, "0"),
+        sourceDomain: "c.example",
+        canonicalUrl: "https://c.example/1",
+      },
+    ];
+    const prompts: string[] = [];
+    const generator: StructuredGenerator = {
+      async generate(input) {
+        prompts.push(input.prompt);
+        return { items: [validItem(candidate.id, ["S1", "S2", "S3"])] };
+      },
+    };
+
+    await summarizeStory("economy", [candidate], generator);
+    await summarizeStory("economy", [candidate], generator);
+
+    const sources = JSON.parse(prompts[0]!.split("출처:\n")[1]!);
+    expect(sources).toHaveLength(3);
+    expect(sources.map((source: { domain: string }) => source.domain)).toEqual([
+      "a.example",
+      "b.example",
+      "c.example",
+    ]);
+    expect(prompts[1]).toBe(prompts[0]);
+    expect(prompts[0]).toContain("작동 구조를 1~2단계 설명하세요");
+    expect(prompts[0]).toContain("trade-off, incentive, second-order effect, verification");
+  });
+
   it("accepts a valid schema and assigns category rank", async () => {
     const generator = mockGenerator([{ items: [validItem("cluster-1")] }]);
     const result = await summarizeStory("economy", [cluster("cluster-1")], generator);

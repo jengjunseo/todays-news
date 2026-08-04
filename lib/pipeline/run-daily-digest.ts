@@ -1,5 +1,9 @@
 import type { StructuredGenerator } from "@/lib/ai/structured-generator";
-import { summarizeStory } from "@/lib/digest/summarize-story";
+import { isExternalAiCallError } from "@/lib/ai/structured-generator";
+import {
+  createFallbackDigestItem,
+  summarizeStory,
+} from "@/lib/digest/summarize-story";
 import { clusterAndRank, topCandidatesByCategory } from "@/lib/news/cluster";
 import { collectNewsCandidates, configuredNewsProvider } from "@/lib/news/collect";
 import { NEWS_CATEGORIES, type NewsProvider } from "@/lib/news/types";
@@ -56,9 +60,49 @@ export async function runDailyDigest(options: {
       }),
     );
     logStage("all_category_summaries_completed", { runKey });
-    const items = summaryResults.flatMap((result) =>
-      result.status === "fulfilled" ? result.value : [],
+    const primaryItems: Awaited<ReturnType<typeof summarizeStory>> = [];
+    const extraCandidates: Array<{
+      item: Awaited<ReturnType<typeof summarizeStory>>[number];
+      score: number;
+      categoryIndex: number;
+    }> = [];
+    NEWS_CATEGORIES.forEach((category, index) => {
+      const categoryCandidates = candidates[category];
+      if (categoryCandidates.length === 0) return;
+      const result = summaryResults[index]!;
+      if (result.status === "fulfilled" && result.value.length > 0) {
+        primaryItems.push(result.value[0]!);
+        const extra = result.value[1];
+        if (extra) {
+          extraCandidates.push({
+            item: extra,
+            score: categoryCandidates.find((cluster) => cluster.id === extra.clusterId)!
+              .deterministicScore,
+            categoryIndex: index,
+          });
+        }
+        return;
+      }
+      const reason = result.status === "fulfilled"
+        ? "empty-ai-result"
+        : fallbackReason(result.reason);
+      const fallback = createFallbackDigestItem(category, categoryCandidates[0]!);
+      logStage("category_summary_fallback", {
+        runKey,
+        category,
+        reason,
+        clusterId: fallback.clusterId,
+        sourceCount: categoryCandidates[0]!.sourceCount,
+      });
+      primaryItems.push(fallback);
+    });
+    extraCandidates.sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.categoryIndex - right.categoryIndex ||
+        left.item.clusterId.localeCompare(right.item.clusterId),
     );
+    const items = [...primaryItems, ...extraCandidates.slice(0, 2).map(({ item }) => item)];
     if (items.length === 0) {
       const representativeError = summaryResults.find(
         (result): result is PromiseRejectedResult => result.status === "rejected",
@@ -109,4 +153,14 @@ export async function runDailyDigest(options: {
     await publisher.failRun(runKey, error instanceof Error ? error.message : "unknown pipeline error");
     throw error;
   }
+}
+
+function fallbackReason(error: unknown) {
+  if (
+    error instanceof Error &&
+    (error.name === "TimeoutError" || /timeout|operation (?:was )?aborted/i.test(error.message))
+  ) {
+    return "timeout";
+  }
+  return isExternalAiCallError(error) ? "external-error" : "invalid-output";
 }

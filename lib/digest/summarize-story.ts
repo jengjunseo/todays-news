@@ -56,7 +56,7 @@ type GroundedSource = {
 function groundedSources(candidates: StoryCluster[]) {
   let index = 0;
   return candidates.flatMap((cluster) =>
-    cluster.articles.map((article): GroundedSource => ({
+    selectPromptArticles(cluster).map((article): GroundedSource => ({
       id: `S${++index}`,
       articleId: article.id,
       clusterId: cluster.id,
@@ -69,6 +69,73 @@ function groundedSources(candidates: StoryCluster[]) {
   );
 }
 
+function selectPromptArticles(cluster: StoryCluster) {
+  const articles = [...cluster.articles].sort((left, right) => left.id.localeCompare(right.id));
+  const selected = [];
+  const selectedIds = new Set<string>();
+  const domains = new Set<string>();
+
+  for (const article of articles) {
+    if (domains.has(article.sourceDomain)) continue;
+    selected.push(article);
+    selectedIds.add(article.id);
+    domains.add(article.sourceDomain);
+    if (selected.length === 3) return selected;
+  }
+  for (const article of articles) {
+    if (selectedIds.has(article.id)) continue;
+    selected.push(article);
+    if (selected.length === 3) break;
+  }
+  return selected;
+}
+
+function limitedText(value: string, maxLength: number) {
+  return value.trim().slice(0, maxLength);
+}
+
+export function createFallbackDigestItem(
+  category: NewsCategory,
+  cluster: StoryCluster,
+): DigestItem {
+  const articles = [...cluster.articles].sort((left, right) => left.id.localeCompare(right.id));
+  const descriptions = [...new Set(
+    articles.map((article) => article.description.trim()).filter(Boolean),
+  )];
+  const oneLine = limitedText(descriptions[0] ?? cluster.representativeTitle, 180);
+  const overview = limitedText(
+    descriptions.slice(0, 2).join(" ") || cluster.representativeTitle,
+    1200,
+  );
+  const factualPoints = [...new Set(
+    articles.flatMap((article) => [article.title.trim(), article.description.trim()]).filter(Boolean),
+  )].slice(0, 3);
+  while (factualPoints.length < 2) factualPoints.push(factualPoints[0] ?? cluster.representativeTitle);
+
+  return DigestItemSchema.parse({
+    id: createHash("sha256")
+      .update(`${cluster.targetDate}:${cluster.id}`)
+      .digest("hex")
+      .slice(0, 24),
+    clusterId: cluster.id,
+    category,
+    rank: 1,
+    headline: limitedText(cluster.representativeTitle, 120),
+    oneLine,
+    overview,
+    keyPoints: factualPoints.map((point) => limitedText(point, 240)),
+    analogy: limitedText(`쉽게 보면 지금 확인된 핵심 변화는 ${oneLine}`, 500),
+    whyItMatters: limitedText(
+      `${cluster.sourceCount}개 출처의 보도에서 확인된 사건입니다. 실제 영향 범위는 후속 발표와 적용 내용을 통해 확인해야 합니다.`,
+      800,
+    ),
+    socraticQuestion: "이 발표가 실제 변화로 이어졌는지 확인하려면 앞으로 어떤 지표를 봐야 할까요?",
+    factStatus: "reported",
+    confidence: cluster.sourceCount >= 2 ? 0.65 : 0.5,
+    sourceIds: selectPromptArticles(cluster).map((article) => article.id),
+  });
+}
+
 function buildPrompt(
   category: NewsCategory,
   candidates: StoryCluster[],
@@ -79,7 +146,11 @@ function buildPrompt(
 
 아래 후보 사건에서 정말 중요한 사건만 0~2개 고르세요. 많은 사람의 실제 영향, 실질적 변화, 장기 영향, 여러 출처 확인, 결정과 결과를 우선합니다. 말싸움, 유명인, 논란, 자극적 제목, 루머는 제외합니다.
 
-고등학생이 이해할 수 있는 차분한 한국어로 쓰되 유치하게 쓰지 마세요. 사실·주장·전망을 구분하고, 정답을 유도하지 않는 소크라테스식 질문을 만드세요. 정치적 편향 표현을 피하고, 과학의 초기 연구·경제 전망·기업 발표는 확정 사실처럼 쓰지 마세요.
+고등학교 상위권 학생부터 대학 교양 입문자가 쉽게 읽되 내용은 얕지 않은 차분한 한국어로 쓰세요. "중요하다"거나 "경쟁력이 높아진다"는 결론만 쓰지 말고, 입력 출처에 근거가 있을 때 왜 그런지 작동 구조를 1~2단계 설명하세요. 숫자·기간·제도·이해관계자·비용·공급망·기술적 제약·정책 조건이 기사에 있다면 우선 활용하되 없는 정보는 만들지 마세요.
+
+overview는 무슨 일이 있었는지와 그 의미가 생기는 구조를 함께 설명하세요. keyPoints는 overview를 반복하지 말고 결정/사실, 작동 조건, 다음 확인 변수처럼 서로 다른 역할을 갖게 하세요. 필요한 전문용어 1~2개는 처음에 짧게 뜻을 붙일 수 있습니다. analogy는 억지 비유 대신 실제 구조를 쉬운 말로 다시 설명해도 됩니다. whyItMatters는 실제 관련된 개인·기업·정부·시장·과학기술 주체 중 누구의 무엇이 달라질 수 있는지 구체화하세요. socraticQuestion은 감상이 아니라 trade-off, incentive, second-order effect, verification 중 하나 이상을 생각하게 하세요.
+
+사실·주장·전망을 구분하고, 정치적 편향 표현을 피하세요. 과학의 초기 연구·경제 전망·기업 발표는 확정 사실처럼 쓰지 마세요. 같은 분량에서 정보 밀도를 높이고 기존 schema 길이 한도를 지키세요.
 
 반드시 아래 clusterId와 source ID만 그대로 사용하세요. URL은 출력하지 마세요.
 
@@ -189,6 +260,11 @@ export async function summarizeStory(
   const logStage = (stage: string, details: Record<string, unknown> = {}) => {
     console.log(JSON.stringify({ stage, sourceDate, category, elapsedMs: Date.now() - summaryStartedAt, ...details }));
   };
+  logStage("category_prompt_prepared", {
+    candidateCount: limitedCandidates.length,
+    groundedSourceCount: sources.length,
+    promptChars: prompt.length,
+  });
 
   try {
     let first: unknown;
