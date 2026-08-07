@@ -304,6 +304,7 @@ a {
 
 .news-card {
   overflow: hidden;
+  scroll-margin-top: max(18px, env(safe-area-inset-top));
   border: 1px solid var(--line);
   border-radius: 15px;
   background: var(--surface);
@@ -364,11 +365,7 @@ a {
 }
 
 .card-why {
-  display: -webkit-box;
-  overflow: hidden;
   font-size: 0.95rem;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .expand-label {

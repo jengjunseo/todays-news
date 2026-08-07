@@ -27,9 +27,23 @@ test("daily reading, reflection, archive, insights and settings", async ({ page 
   await expect(firstCard.locator(".source-block a").first()).toHaveAttribute("href", /^https:\/\//);
   await expect(page.locator(".progress-meta")).toContainText(/1 \/ [5-9]|1 \/ 10/);
 
+  await firstCard.locator(".source-block").scrollIntoViewIfNeeded();
   await secondCard.getByRole("button", { name: /자세히 읽기/ }).click();
   await expect(firstCard.getByRole("button")).toHaveAttribute("aria-expanded", "false");
   await expect(secondCard.getByRole("button")).toHaveAttribute("aria-expanded", "true");
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  const openedCardTop = await secondCard.evaluate((card) => card.getBoundingClientRect().top);
+  expect(openedCardTop).toBeGreaterThanOrEqual(0);
+  expect(openedCardTop).toBeLessThanOrEqual(48);
+
+  const collapsedPreviews = page.locator(".news-card[data-expanded='false'] .card-one-line, .news-card[data-expanded='false'] .card-why");
+  for (let index = 0; index < await collapsedPreviews.count(); index += 1) {
+    const preview = collapsedPreviews.nth(index);
+    await expect(preview).not.toHaveText(/\.\.\.|…\s*$/);
+    expect(await preview.evaluate((element) => getComputedStyle(element).webkitLineClamp)).toBe("none");
+  }
 
   const reflection = "이 변화의 비용이 누구에게 먼저 돌아가는지 더 확인하고 싶다.";
   const secondReflection = secondCard.getByPlaceholder("두세 문장으로 생각을 남겨보세요.");

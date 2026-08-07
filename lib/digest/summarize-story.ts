@@ -98,6 +98,50 @@ function textKey(value: string) {
   return normalizedText(value).toLocaleLowerCase("ko-KR").replace(/[^\p{L}\p{N}]/gu, "");
 }
 
+function hasBalancedQuotes(value: string) {
+  const pairs = [
+    ["“", "”"],
+    ["‘", "’"],
+    ["「", "」"],
+    ["『", "』"],
+  ] as const;
+  return (
+    (value.match(/"/g)?.length ?? 0) % 2 === 0 &&
+    pairs.every(
+      ([open, close]) => value.split(open).length === value.split(close).length,
+    )
+  );
+}
+
+function isCompleteSourceText(value: string) {
+  return (
+    !value.includes("...") &&
+    !value.includes("…") &&
+    hasBalancedQuotes(value)
+  );
+}
+
+function completeSourceSentences(value: string) {
+  return (normalizedText(value).match(/[^.!?。]+[.!?。]+(?:["”’」』])?/g) ?? [])
+    .map((sentence) => sentence.trim())
+    .filter(isCompleteSourceText);
+}
+
+function isNearDuplicate(left: string, right: string) {
+  const tokens = (value: string) =>
+    new Set(
+      normalizedText(value)
+        .toLocaleLowerCase("ko-KR")
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((token) => token.length > 1),
+    );
+  const leftTokens = tokens(left);
+  const rightTokens = tokens(right);
+  if (Math.min(leftTokens.size, rightTokens.size) < 3) return false;
+  const overlap = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  return overlap / Math.min(leftTokens.size, rightTokens.size) >= 0.75;
+}
+
 function distinctTexts(values: string[]) {
   const selected: string[] = [];
   const keys: string[] = [];
@@ -110,7 +154,8 @@ function distinctTexts(values: string[]) {
         (existing) =>
           existing === key ||
           (Math.min(existing.length, key.length) > 30 &&
-            (existing.includes(key) || key.includes(existing))),
+            (existing.includes(key) || key.includes(existing))) ||
+          isNearDuplicate(selected[keys.indexOf(existing)]!, text),
       )
     ) {
       continue;
@@ -123,7 +168,7 @@ function distinctTexts(values: string[]) {
 
 function boundedText(value: string, maxLength: number, fallback: string) {
   const text = normalizedText(value);
-  if (text.length <= maxLength) return text;
+  if (text.length <= maxLength && isCompleteSourceText(text)) return text;
 
   const sentences = text.match(/[^.!?。]+[.!?。]+/g) ?? [];
   let complete = "";
@@ -132,13 +177,13 @@ function boundedText(value: string, maxLength: number, fallback: string) {
     if (next.length > maxLength) break;
     complete = next;
   }
-  if (complete) return complete;
+  if (complete && isCompleteSourceText(complete)) return complete;
 
   const safeFallback = normalizedText(fallback);
-  if (safeFallback && safeFallback.length <= maxLength) return safeFallback;
-  const boundary = text.lastIndexOf(" ", maxLength - 1);
-  const end = boundary > Math.floor(maxLength * 0.6) ? boundary : maxLength - 1;
-  return `${text.slice(0, end).trimEnd()}…`;
+  if (safeFallback && safeFallback.length <= maxLength && isCompleteSourceText(safeFallback)) {
+    return safeFallback;
+  }
+  return "확인된 보도 내용을 살펴봐야 합니다.";
 }
 
 const FALLBACK_WHY_IT_MATTERS: Record<NewsCategory, string> = {
@@ -154,12 +199,17 @@ export function createFallbackDigestItem(
   cluster: StoryCluster,
 ): DigestItem {
   const articles = [...cluster.articles].sort((left, right) => left.id.localeCompare(right.id));
-  const headline = boundedText(cluster.representativeTitle, 120, "핵심 뉴스");
-  const facts = distinctTexts([
-    ...articles.map((article) => article.description),
-    ...articles.map((article) => article.title),
-  ]).filter((text) => textKey(text) !== textKey(headline));
-  const oneLine = boundedText(facts[0] ?? headline, 180, headline);
+  const headline =
+    distinctTexts([cluster.representativeTitle, ...articles.map((article) => article.title)])
+      .find((title) => title.length <= 120 && isCompleteSourceText(title)) ?? "확인된 주요 보도";
+  const facts = distinctTexts(
+    articles.flatMap((article) => completeSourceSentences(article.description)),
+  ).filter((text) => textKey(text) !== textKey(headline));
+  const oneLine = boundedText(
+    facts[0] ?? "관련 보도가 나왔으며 구체적인 내용은 후속 보도로 확인해야 합니다.",
+    180,
+    "관련 보도가 나왔으며 구체적인 내용은 후속 보도로 확인해야 합니다.",
+  );
   const remainingFacts = facts.filter((text) => textKey(text) !== textKey(oneLine));
   const overview = boundedText(
     remainingFacts[0] ?? `${headline}와 관련한 보도가 나왔습니다. 구체적인 범위와 결과는 후속 보도로 확인해야 합니다.`,

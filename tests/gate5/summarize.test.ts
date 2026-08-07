@@ -205,4 +205,32 @@ describe("AI selection and grounded explanation", () => {
     expect(item.socraticQuestion).toContain(item.oneLine);
     expect(item.socraticQuestion).not.toMatch(/trade-off|incentive|second-order effect|verification/i);
   });
+
+  it("drops partial snippets, unbalanced quotes, and duplicate fallback facts", () => {
+    const candidate = cluster("fallback-fragments");
+    candidate.representativeTitle = "지역 기업이 신규 사업 계획을 발표했다";
+    candidate.articles = [
+      {
+        ...candidate.articles[0]!,
+        id: "fragment-a".padEnd(32, "0"),
+        title: candidate.representativeTitle,
+        description: "지역 경제를 활성화하고, ... 회사는 다음 달 시범 사업을 시작한다고 밝혔다. 고객 신",
+      },
+      {
+        ...candidate.articles[1]!,
+        id: "fragment-b".padEnd(32, "0"),
+        title: "신규 사업 계획의 일정 공개",
+        description: "“새 사업은 지역 경제를 회사는 다음 달 시범 사업을 시작한다고 밝혔다. 적용 대상은 두 지역으로 제한된다.",
+      },
+    ];
+
+    const item = createFallbackDigestItem("economy", candidate);
+    const fields = [item.oneLine, item.overview, ...item.keyPoints, item.analogy];
+    const normalized = fields.map((value) => value.replace(/[^\p{L}\p{N}]/gu, ""));
+
+    expect(fields.join(" ")).not.toMatch(/\.\.\.|…|고객 신|“새 사업은/);
+    expect(new Set(normalized).size).toBe(normalized.length);
+    expect(item.oneLine).toBe("회사는 다음 달 시범 사업을 시작한다고 밝혔다.");
+    expect(item.overview).toBe("적용 대상은 두 지역으로 제한된다.");
+  });
 });

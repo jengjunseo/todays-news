@@ -109,6 +109,22 @@ function hasConflictingDecision(left: Set<string>, right: Set<string>) {
   });
 }
 
+function hasSharedNumber(articles: SourceArticle[]) {
+  if (articles.length < 2) return false;
+  const shared = new Set(numbers(articles[0]!.normalizedTitle));
+  for (const article of articles.slice(1)) {
+    for (const value of shared) {
+      if (!numbers(article.normalizedTitle).has(value)) shared.delete(value);
+    }
+  }
+  return shared.size > 0;
+}
+
+function canJoinGroup(group: SourceArticle[], article: SourceArticle) {
+  const matches = group.map((item) => sameStory(item, article));
+  return matches.every(Boolean) || (hasSharedNumber(group) && matches.some(Boolean));
+}
+
 export function sameStory(left: SourceArticle, right: SourceArticle) {
   if (left.category !== right.category || left.targetDate !== right.targetDate) return false;
   if (left.canonicalUrl === right.canonicalUrl) return true;
@@ -198,20 +214,22 @@ export function clusterAndRank(input: SourceArticle[]) {
   const clusters: StoryCluster[] = [];
 
   for (const category of NEWS_CATEGORIES) {
-    const categoryArticles = byUrl.filter((article) => article.category === category);
+    const categoryArticles = byUrl
+      .filter((article) => article.category === category)
+      .sort(
+        (left, right) =>
+          left.normalizedTitle.localeCompare(right.normalizedTitle, "ko-KR") ||
+          left.id.localeCompare(right.id),
+      );
     const groups: SourceArticle[][] = [];
     for (const article of categoryArticles) {
-      const matchingGroups = groups.filter((group) => group.some((item) => sameStory(item, article)));
+      const matchingGroups = groups.filter((group) => canJoinGroup(group, article));
       if (matchingGroups.length === 0) {
         groups.push([article]);
         continue;
       }
       const primary = matchingGroups[0]!;
       primary.push(article);
-      for (const extra of matchingGroups.slice(1)) {
-        primary.push(...extra);
-        groups.splice(groups.indexOf(extra), 1);
-      }
     }
     clusters.push(...groups.map(makeCluster));
   }

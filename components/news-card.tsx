@@ -1,8 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { DigestItemWithSources } from "@/lib/demo/digest";
+
+function hasBalancedQuotes(value: string) {
+  const pairs = [
+    ["“", "”"],
+    ["‘", "’"],
+    ["「", "」"],
+    ["『", "』"],
+  ] as const;
+  return (
+    (value.match(/"/g)?.length ?? 0) % 2 === 0 &&
+    pairs.every(
+      ([open, close]) => value.split(open).length === value.split(close).length,
+    )
+  );
+}
+
+export function completePreviewSentence(...values: string[]) {
+  for (const value of values) {
+    const sentences = value
+      .replace(/\s+/g, " ")
+      .trim()
+      .match(/[^.!?。]+[.!?。]+(?:["”’」』])?/g) ?? [];
+    const sentence = sentences
+      .map((candidate) => candidate.trim())
+      .find(
+        (candidate) =>
+          candidate.length <= 180 &&
+          !candidate.includes("...") &&
+          !candidate.includes("…") &&
+          hasBalancedQuotes(candidate),
+      );
+    if (sentence) return sentence;
+  }
+  return null;
+}
 
 export function NewsCard({
   item,
@@ -20,7 +55,22 @@ export function NewsCard({
   const [reflection, setReflection] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const hydrated = useRef(false);
+  const cardRef = useRef<HTMLElement>(null);
+  const wasExpanded = useRef(expanded);
   const draftKey = `yesterday-core:reflection:${item.id}`;
+  const oneLinePreview = completePreviewSentence(item.oneLine, item.overview);
+  const whyPreview = completePreviewSentence(item.whyItMatters);
+
+  useLayoutEffect(() => {
+    const justOpened = expanded && !wasExpanded.current;
+    wasExpanded.current = expanded;
+    if (!justOpened) return;
+
+    const frame = requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [expanded]);
 
   useEffect(() => {
     const stored = localStorage.getItem(draftKey) ?? "";
@@ -46,15 +96,15 @@ export function NewsCard({
   }, [draftKey, item.id, reflection]);
 
   return (
-    <article className="news-card" data-expanded={expanded}>
+    <article ref={cardRef} className="news-card" data-expanded={expanded}>
       <button className="news-card__summary" type="button" onClick={onToggle} aria-expanded={expanded}>
         <span className="card-meta">
           <span className="category-pill">{categoryLabel}</span>
           {read ? <span className="read-mark">읽음</span> : null}
         </span>
         <strong>{item.headline}</strong>
-        <span className="card-one-line">{item.oneLine}</span>
-        <span className="card-why">{item.whyItMatters}</span>
+        {oneLinePreview ? <span className="card-one-line">{oneLinePreview}</span> : null}
+        {whyPreview ? <span className="card-why">{whyPreview}</span> : null}
         <span className="expand-label">{expanded ? "접기" : "자세히 읽기"}</span>
       </button>
 

@@ -48,6 +48,17 @@ describe("story clustering and ranking", () => {
     expect(sameStory(freeze, raise)).toBe(false);
   });
 
+  it("does not merge two different events through one bridge headline", () => {
+    const redevelopment = article("a", "서울 강남 재개발 사업 승인", "https://a.example/a");
+    const bridge = article("b", "서울 강남 재개발 교통 대책", "https://b.example/b");
+    const subway = article("c", "강남 교통 대책 지하철 연장", "https://c.example/c");
+
+    expect(sameStory(redevelopment, bridge)).toBe(true);
+    expect(sameStory(bridge, subway)).toBe(true);
+    expect(sameStory(redevelopment, subway)).toBe(false);
+    expect(clusterAndRank([redevelopment, bridge, subway])).toHaveLength(2);
+  });
+
   it("deduplicates an identical canonical URL", () => {
     const first = article("a", "금리 동결", "https://a.example/shared");
     const second = article("b", "기준금리 유지", "https://a.example/shared");
